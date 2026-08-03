@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+dist/
+
+# Build output
+*.log
+.DS_Store
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# Capacitor generated
+android/app/build/
+android/capacitor-cordova-android-plugins/
+
+# Keystore (never commit)
+android/app/release.keystore
+*.keystore
+*.jks
+
+# OS
+Thumbs.db
