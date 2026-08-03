@@ -1,14 +1,15 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "com.yuexuxingzuo.app"
+    namespace "com.qingxujifen.app"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.yuexuxingzuo.app"
+        applicationId "com.qingxujifen.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        multiDexEnabled true
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -72,19 +73,15 @@ dependencies {
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
     
-    // 百度广告 SDK
-    implementation(name:'Baidu_MobAds_SDK-release_v9.432',ext:'aar')
-    implementation(name:'Baidu_MobAds_Tools_SDK-release_v3.1',ext:'aar')
+    // 优量汇（GDT）广告 SDK
+    implementation(name:'GDTSDK.unionNormal.4.690.1560',ext:'aar')
     
-    // 百度广告 SDK 依赖的 JAR 文件
+    // 优量汇 SDK 依赖
     implementation files('libs/android-query-full.0.26.7.jar')
-    implementation files('libs/okhttp-3.9.0.jar')
-    
-    // 百度广告 SDK 依赖
-    implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
-    implementation 'com.google.android.gms:play-services-appset:16.0.2'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'com.google.android.material:material:1.11.0'
+    implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
+    implementation 'androidx.multidex:multidex:2.0.0'
 }
 
 apply from: 'capacitor.build.gradle'

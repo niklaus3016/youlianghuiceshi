@@ -1,6 +1,6 @@
 import { registerPlugin, PluginListenerHandle } from '@capacitor/core';
 
-export interface BaiduAdPlugin {
+export interface GDTAdPlugin {
   loadRewardVideoAd(options: { adId: string }): Promise<void>;
   showRewardVideoAd(): Promise<void>;
   isReady(): Promise<{ ready: boolean }>;
@@ -8,8 +8,8 @@ export interface BaiduAdPlugin {
   removeListener(eventName: string, listenerFunc: (data: any) => void): Promise<void>;
 }
 
-const BaiduAd = registerPlugin<BaiduAdPlugin>('BaiduAd', {
-  web: () => import('./BaiduAdPluginWeb').then(m => new m.BaiduAdPluginWeb() as any),
+const GDTAd = registerPlugin<GDTAdPlugin>('GDTAd', {
+  web: () => import('./GDTAdPluginWeb').then(m => new m.GDTAdPluginWeb() as any),
 });
 
-export default BaiduAd;
+export default GDTAd;

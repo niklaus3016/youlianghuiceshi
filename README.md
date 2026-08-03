@@ -1,10 +1,10 @@
-# 月序星座 - 广告变现系统
+# 轻序计分 - 广告变现系统
 
 ![Build Status](https://github.com/niklaus3016/admaster-data/workflows/Build%20Project/badge.svg)
 ![Deploy Status](https://github.com/niklaus3016/admaster-data/workflows/Deploy%20to%20GitHub%20Pages/badge.svg)
 ![APK Build Status](https://github.com/niklaus3016/admaster-data/workflows/Build%20Android%20APK/badge.svg)
 
-基于Vue3 + TypeScript + Vite开发的月序星座广告变现系统前端应用。
+基于Vue3 + TypeScript + Vite开发的轻序计分广告变现系统前端应用。
 
 ## 功能特性
 
@@ -20,8 +20,9 @@
 - ✅ 奖券状态显示（未开奖、中奖、作废）
 - ✅ 底栏红点通知（显示未开奖奖券数量）
 - ✅ 福利抽奖功能（暂未正式开放）
-- ✅ 百度广告集成
+- ✅ 优量汇（GDT）广告集成
 - ✅ 智能广告预加载机制
+- ✅ 多广告位降级策略
 
 ## 技术栈
 
@@ -31,7 +32,7 @@
 - **类型检查**：TypeScript 5.8.2
 - **样式框架**：Tailwind CSS 4.1.14
 - **图标库**：Lucide Vue Next 0.575.0
-- **广告SDK**：百度广告SDK
+- **广告SDK**：优量汇（GDT）SDK 4.690.1560
 - **移动端打包**：Capacitor 6.x
 
 ## 项目结构
@@ -51,8 +52,8 @@ project/
 │   │   ├── LotteryDetail.vue
 │   │   └── WelfareLottery.vue
 │   ├── plugins/           # 插件
-│   │   ├── BaiduAdPlugin.ts
-│   │   └── BaiduAdPluginWeb.ts
+│   │   ├── GDTAdPlugin.ts
+│   │   └── GDTAdPluginWeb.ts
 │   ├── router/            # 路由配置
 │   │   └── index.ts
 │   ├── App.vue            # 根组件
@@ -60,6 +61,14 @@ project/
 │   └── index.css          # 全局样式
 ├── android/               # Android项目
 │   ├── app/               # Android应用代码
+│   │   ├── libs/          # 第三方AAR库
+│   │   │   └── GDTSDK.unionNormal.4.690.1560.aar
+│   │   └── src/main/
+│   │       ├── AndroidManifest.xml
+│   │       └── java/com/gaoqianleme/app/
+│   │           ├── MainActivity.java
+│   │           ├── MainApplication.java
+│   │           └── GDTAdPlugin.java
 │   ├── gradle/            # Gradle配置
 │   └── gradlew            # Gradle包装器
 ├── .github/workflows/   # GitHub Actions工作流
@@ -137,6 +146,19 @@ cd android
 
 APK文件将生成在 `android/app/build/outputs/apk/debug/app-debug.apk`。
 
+### 广告位配置
+
+在 `src/pages/Home.vue` 中配置优量汇广告信息：
+
+```typescript
+const adConfig = {
+  appId: '你的优量汇AppID',
+  slotIds: ['广告位ID1', '广告位ID2', ...]
+};
+```
+
+> ⚠️ 注意：广告位ID为19位数字，需替换为真实的优量汇广告位ID。
+
 ## 部署
 
 ### GitHub Pages
@@ -196,19 +218,29 @@ niklaus3016
 
 ## 更新日志
 
-### v1.1.0 (2026-06-13) - 月序星座
+### v1.2.0 (2026-06-13) - 优量汇SDK迁移
 
-- ✅ 应用重命名为「月序星座」
-- ✅ 更新应用包名为 `com.yuexuxingzuo.app`
+- ✅ 将百度广告SDK完全替换为优量汇（GDT）SDK v4.690.1560
+- ✅ 重写Android原生插件 `GDTAdPlugin.java`
+- ✅ 实现激励视频广告加载、展示、回调逻辑
+- ✅ 新增 `GDTAdPlugin.ts` / `GDTAdPluginWeb.ts` Capacitor插件
+- ✅ 更新 `useAdManager.ts` 适配GDT广告API
+- ✅ 移除H5广告、原生广告功能（仅保留激励视频广告）
+- ✅ 配置GDT FileProvider和网络安全设置
+- ✅ 支持多广告位降级策略
+
+### v1.1.0 (2026-06-13) - 轻序计分
+
+- ✅ 应用重命名为「轻序计分」
+- ✅ 更新应用包名为 `com.qingxujifen.app`
 - ✅ 更新广告位配置（15个广告位）
-- ✅ 更新百度广告AppId
 - ✅ 更新应用图标
 - ✅ 调整eCPM高值传输比例为30%
 
-### v1.0.1 (2026-04-14) - 月序星座广告正式版
+### v1.0.1 (2026-04-14) - 轻序计分广告正式版
 
-- ✅ 应用重命名为「月序星座」
-- ✅ 更新应用包名为 `com.yuexuxingzuo.app`
+- ✅ 应用重命名为「轻序计分」
+- ✅ 更新应用包名为 `com.qingxujifen.app`
 - ✅ 集成百度广告SDK
 - ✅ 更新广告位配置（12个广告位）
 - ✅ 实现智能广告预加载机制
