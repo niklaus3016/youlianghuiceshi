@@ -46,9 +46,22 @@ public class MainApplication extends Application {
             GlobalSetting.setEnableCollectAppInstallStatus(true);
 
             // 4.560.1430 版本后使用 initWithoutStart + start 方式
+            // initWithoutStart 不会采集用户信息，但必须尽快调用 start
             GDTAdSdk.initWithoutStart(this, APP_ID);
 
-            Log.d(TAG, "优量汇(GDT)广告SDK初始化完成");
+            // 调用 start 启动 SDK，否则可能影响广告填充
+            GDTAdSdk.start(new GDTAdSdk.OnStartListener() {
+                @Override
+                public void onStartSuccess() {
+                    Log.d(TAG, "✅ 优量汇(GDT)广告SDK启动成功，可以开始拉取广告");
+                }
+
+                @Override
+                public void onStartFailed(Exception e) {
+                    Log.e(TAG, "❌ 优量汇(GDT)广告SDK启动失败: " + e.toString());
+                }
+            });
+
         } catch (Exception e) {
             Log.e(TAG, "优量汇SDK初始化异常: " + e.getMessage(), e);
         }
