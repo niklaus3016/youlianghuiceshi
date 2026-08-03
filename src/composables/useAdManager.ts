@@ -800,20 +800,23 @@ export function useAdManager(config: AdConfig) {
   };
   
   const resetAdState = () => {
+    console.log(`[DEBUG] resetAdState 调用 - 当前状态: currentSessionId=${currentSessionId}, triedSlots=${triedSlots}`);
     currentSlotIndex = 0;
     triedSlots = 0;
     isAdLoading.value = false;
     isAdReady.value = false;
     hasShownAd = false; // 重置广告显示标志
     currentSessionId++;
-    console.log(`🆕 新会话开始，会话ID: ${currentSessionId}`);
+    console.log(`[DEBUG] 🆕 新会话开始，会话ID: ${currentSessionId}`);
+    console.log(`[DEBUG] resetAdState 完成 - 所有状态已重置`);
   };
 
   onMounted(() => initializeAdSdk());
   onUnmounted(() => cleanupListeners());
 
   const cleanupListeners = () => {
-    console.log('🔄 清理广告监听器...');
+    console.log('[DEBUG] 🔄 清理广告监听器...');
+    console.log('[DEBUG] cleanupListeners - rewardListener:', !!rewardListener, 'errorListener:', !!errorListener, 'videoCachedListener:', !!videoCachedListener, 'adCloseListener:', !!adCloseListener);
     
     const listeners = [
       { name: 'onReward', handler: rewardListener },
@@ -828,9 +831,12 @@ export function useAdManager(config: AdConfig) {
       if (handler) {
         try {
           GDTAd.removeListener(name, handler);
+          console.log(`[DEBUG] cleanupListeners - 已移除 ${name} 监听器`);
         } catch (e) {
-          console.warn(`移除 ${name} 监听器失败:`, e);
+          console.warn(`[DEBUG] 移除 ${name} 监听器失败:`, e);
         }
+      } else {
+        console.log(`[DEBUG] cleanupListeners - ${name} 监听器为 null，跳过`);
       }
     });
     
@@ -841,14 +847,15 @@ export function useAdManager(config: AdConfig) {
     adLoadListener = null;
     adCloseListener = null;
     
-    [timeoutId, retryTimeoutId, slotTimeoutId].forEach(id => {
+    [timeoutId, retryTimeoutId, slotTimeoutId].forEach((id, index) => {
       if (id) {
         clearTimeout(id);
+        console.log(`[DEBUG] cleanupListeners - 已清除定时器 [${index}]`);
         id = null;
       }
     });
     
-    console.log('✅ 监听器清理完成');
+    console.log('[DEBUG] ✅ 监听器清理完成');
   };
 
   const isNativeApp = () => {
@@ -857,14 +864,26 @@ export function useAdManager(config: AdConfig) {
   };
 
   const initializeAdSdk = async () => {
-    if (typeof window === 'undefined') return;
+    console.log('[DEBUG] ======== initializeAdSdk 开始 ========');
+    console.log('[DEBUG] initializeAdSdk - typeof window:', typeof window);
+    
+    if (typeof window === 'undefined') {
+      console.log('[DEBUG] initializeAdSdk - window 未定义，跳过初始化');
+      return;
+    }
 
     try {
-      if (isNativeApp()) {
+      const isNative = isNativeApp();
+      console.log('[DEBUG] initializeAdSdk - isNativeApp:', isNative);
+      console.log('[DEBUG] initializeAdSdk - Capacitor platform:', (window as any).Capacitor?.getPlatform());
+      
+      if (isNative) {
         console.log('原生 Android 环境，使用优量汇(GDT)原生 SDK');
         isAdSdkReady.value = true;
         isLoaded.value = true;
         preloadAd.value = true;
+        console.log('[DEBUG] initializeAdSdk - 设置 isAdSdkReady=true, isLoaded=true, preloadAd=true');
+        console.log('[DEBUG] initializeAdSdk - 初始化完成，准备使用简单加载流程');
         
         // 注释掉预加载代码，使用简单加载流程
         // // SDK 加载成功后 500ms 触发预加载
@@ -880,12 +899,15 @@ export function useAdManager(config: AdConfig) {
       isLoaded.value = true;
       isAdSdkReady.value = false;
       preloadAd.value = true;
+      console.log('[DEBUG] initializeAdSdk - Web 环境，设置 isAdSdkReady=false');
     } catch (error) {
-      console.error('初始化广告 SDK 失败:', error);
+      console.error('[DEBUG] 初始化广告 SDK 失败:', error);
+      console.error('[DEBUG] 错误详情 - message:', error?.message, 'stack:', error?.stack);
       isLoaded.value = true;
       isAdSdkReady.value = false;
       preloadAd.value = true;
     }
+    console.log('[DEBUG] ======== initializeAdSdk 结束 ========');
   };
   
   // 显示预加载的广告
@@ -1002,39 +1024,55 @@ export function useAdManager(config: AdConfig) {
   // 红包触发逻辑已移至后端处理
 
   const showAd = async (): Promise<{ ecpm: number; slotId: string }> => {
+    const startTime = Date.now();
+    console.log(`[DEBUG] ======== showAd 开始 ========`);
+    console.log(`[DEBUG] showAd - isProcessing=${isProcessing}, isAdLoading=${isAdLoading.value}, isAdReady=${isAdReady.value}`);
+    console.log(`[DEBUG] showAd - config.slotIds=${JSON.stringify(config.slotIds)}`);
+    
     return new Promise(async (resolve, reject) => {
       // 防止并发请求
       if (isProcessing) {
+        console.log('[DEBUG] showAd - 被拒绝: 已有广告正在处理');
         console.log('⚠️ 已有广告正在处理，请等待');
         reject(new Error('已有广告正在处理'));
         return;
       }
       
       isProcessing = true;
+      console.log(`[DEBUG] showAd - 设置 isProcessing=true, 调用 resetAdState()`);
       resetAdState();
       currentResolve = resolve;
       currentReject = reject;
+      console.log(`[DEBUG] showAd - currentResolve/currentReject 已设置`);
       
       console.log('========== 开始加载激励视频广告（简单模式） ==========');
       console.log('所有广告位:', config.slotIds);
       
       // 简化：直接使用 tryLoadAd 加载，不使用预加载
       try {
+        console.log(`[DEBUG] showAd - 调用 tryLoadAd()`);
+        const loadStartTime = Date.now();
         const result = await tryLoadAd();
+        const loadDuration = Date.now() - loadStartTime;
+        console.log(`[DEBUG] showAd - tryLoadAd 返回: result=${result}, 耗时=${loadDuration}ms`);
         
         if (result === 'success') {
+          console.log(`[DEBUG] showAd - 广告加载并显示成功 (耗时: ${Date.now() - startTime}ms)`);
           console.log('✅ 广告加载并显示成功');
           // currentResolve 已在 onReward 中被调用
         } else if (result === 'session_expired') {
+          console.log('[DEBUG] showAd - 会话已过期');
           console.log('❌ 会话已过期');
           isProcessing = false;
           reject(new Error('会话已过期'));
         } else {
+          console.log('[DEBUG] showAd - 广告加载失败');
           console.log('❌ 广告加载失败');
           isProcessing = false;
           reject(new Error('暂无广告'));
         }
       } catch (error) {
+        console.log(`[DEBUG] showAd - 捕获异常:`, error);
         console.log('❌ 广告加载异常:', error);
         isProcessing = false;
         reject(new Error('广告加载异常'));
@@ -1046,118 +1084,184 @@ export function useAdManager(config: AdConfig) {
   const tryLoadAd = async (): Promise<'success' | 'failed' | 'session_expired'> => {
     const sessionId = currentSessionId;
     let currentAdSuccess = false; // 当前广告是否成功
+    const loadStartTime = Date.now();
+    
+    console.log(`[DEBUG] ========== tryLoadAd 开始 ==========`);
+    console.log(`[DEBUG] tryLoadAd - sessionId=${sessionId}, triedSlots=${triedSlots}, currentSlotIndex=${currentSlotIndex}`);
+    console.log(`[DEBUG] tryLoadAd - isAdLoading=${isAdLoading.value}, isAdReady=${isAdReady.value}`);
+    console.log(`[DEBUG] config.slotIds=${JSON.stringify(config.slotIds)}`);
     
     const checkSession = () => sessionId === currentSessionId;
     
     if (!checkSession()) {
-      console.log('会话已过期，停止加载');
+      console.log('[DEBUG] 会话已过期，停止加载');
       return 'session_expired';
     }
     
     // 检查是否已尝试所有轮次
     const maxSlots = config.slotIds.length;
     if (triedSlots >= maxSlots) {
-      console.log('所有广告位都已尝试');
+      console.log('[DEBUG] 所有广告位都已尝试, maxSlots=' + maxSlots);
       return 'failed';
     }
     
     // 清理之前的监听器
     cleanupListeners();
+    console.log('[DEBUG] 已清理之前的监听器');
     
     const selectedSlotId = getNextSlotId();
-    console.log(`尝试加载广告位: ${selectedSlotId}`);
+    console.log(`[DEBUG] 尝试加载广告位: ${selectedSlotId}, triedSlots=${triedSlots}`);
     
     return new Promise((resolveLoad) => {
       let isResolved = false; // 标记当前加载是否已解决
+      const slotStartTime = Date.now();
       
       const resolveOnce = (result: 'success' | 'failed') => {
+        console.log(`[DEBUG] resolveOnce 被调用 - result=${result}, isResolved=${isResolved}, 耗时=${Date.now() - loadStartTime}ms`);
         if (!isResolved) {
           isResolved = true;
           resolveLoad(result);
+          console.log(`[DEBUG] resolveLoad(${result}) 已执行`);
+        } else {
+          console.log(`[DEBUG] resolveOnce 被忽略 - 已经 resolved 过了`);
         }
       };
       
       const onADLoad = () => {
-        if (!checkSession()) return;
-        console.log('✅ 广告加载成功回调');
+        const loadTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onADLoad 触发 - 广告加载成功回调 (距离加载开始: ${loadTime}ms)`);
+        console.log('[DEBUG] onADLoad - checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess);
+        if (!checkSession()) {
+          console.log('[DEBUG] onADLoad - 会话已过期，忽略');
+          return;
+        }
+        console.log('[DEBUG] onADLoad - 会话有效，广告已加载成功');
       };
 
       const onReward = (result: any) => {
-        if (!checkSession() || currentAdSuccess) return;
+        const rewardTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onReward 触发 - 收到奖励回调 (距离加载开始: ${rewardTime}ms)`);
+        console.log('[DEBUG] onReward result 完整内容:', JSON.stringify(result));
+        console.log('[DEBUG] onReward - result 类型:', typeof result);
+        console.log('[DEBUG] onReward - result 键:', result ? Object.keys(result) : 'null/undefined');
+        console.log('[DEBUG] onReward checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess, 'isResolved:', isResolved);
+        
+        if (!checkSession() || currentAdSuccess) {
+          console.log('[DEBUG] onReward - 被忽略: checkSession=' + checkSession() + ', currentAdSuccess=' + currentAdSuccess);
+          return;
+        }
         
         console.log('========== 广告奖励回调 ==========');
         console.log('结果:', result);
         
         currentAdSuccess = true;
-        if (slotTimeoutId) clearTimeout(slotTimeoutId);
+        console.log('[DEBUG] onReward - currentAdSuccess 设为 true');
+        
+        if (slotTimeoutId) {
+          clearTimeout(slotTimeoutId);
+          console.log('[DEBUG] onReward - 已清除 slotTimeoutId');
+        }
         
         // 清理监听器，防止 onADClose 的延迟回调误判
         cleanupListeners();
+        console.log('[DEBUG] onReward - 已清理监听器');
         
-        const currentSlotId = config.slotIds[(currentSlotIndex - 1 + config.slotIds.length) % config.slotIds.length];
+        // 获取当前广告位ID（这里用 selectedSlotId，因为这是我们加载的广告位）
+        const currentSlotId = selectedSlotId;
+        console.log(`[DEBUG] onReward - currentSlotId=${currentSlotId}`);
 
         // 所有广告位（保价 + 竞价）统一使用模拟 ECPM，不使用 SDK 返回的真实 eCPM
         const simulatedEcpm = generateSimulatedEcpm(currentSlotId);
         const ecpm = calculateActualEcpm(simulatedEcpm);
-        console.log(`使用模拟 ECPM: ${simulatedEcpm} → 实际传输: ${ecpm}（SDK返回: ${result.ecpm || 0}）`);
+        console.log(`[DEBUG] onReward - 使用模拟 ECPM: ${simulatedEcpm} → 实际传输: ${ecpm}`);
+        console.log(`[DEBUG] onReward - SDK返回的ecpm: ${result.ecpm || 0}`);
 
         isAdLoading.value = false;
         isAdReady.value = false;
         
         console.log('✅ 广告成功，返回 ECPM:', ecpm, '广告位ID:', currentSlotId);
-        cleanupListeners();
-        currentResolve({ ecpm, slotId: currentSlotId });
+        
+        if (currentResolve) {
+          console.log('[DEBUG] onReward - 调用 currentResolve，传递 { ecpm, slotId }');
+          currentResolve({ ecpm, slotId: currentSlotId });
+          console.log('[DEBUG] onReward - currentResolve 调用完成');
+        } else {
+          console.warn('[DEBUG] onReward - currentResolve 为 null! Promise 可能已被拒绝');
+        }
         
         currentResolve = null;
         currentReject = null;
         isProcessing = false;
+        console.log(`[DEBUG] onReward - isProcessing 设为 false, 准备 resolveOnce('success')`);
         resolveOnce('success');
       };
       
       const onError = (error: any) => {
-        if (!checkSession() || currentAdSuccess || isResolved) return;
+        const errorTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onError 触发 (距离加载开始: ${errorTime}ms)`);
+        console.log('[DEBUG] onError - 错误详情:', JSON.stringify(error));
+        console.log('[DEBUG] onError - 错误类型:', typeof error);
+        console.log('[DEBUG] onError - checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess, 'isResolved:', isResolved);
+        
+        if (!checkSession() || currentAdSuccess || isResolved) {
+          console.log('[DEBUG] onError - 被忽略 (会话过期或已处理)');
+          return;
+        }
         
         console.warn('⚠️ 广告加载失败:', error?.error || error);
         lastError.value = '广告加载失败: ' + (error?.error || error || '未知错误');
         
-        if (slotTimeoutId) clearTimeout(slotTimeoutId);
+        if (slotTimeoutId) {
+          clearTimeout(slotTimeoutId);
+          console.log('[DEBUG] onError - 已清除超时定时器');
+        }
         cleanupListeners();
         resolveOnce('failed');
       };
 
       const onVideoCached = async () => {
-        if (!checkSession() || currentAdSuccess || isResolved) return;
+        const cacheTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onVideoCached 触发 - 视频下载成功 (距离加载开始: ${cacheTime}ms)`);
+        console.log('[DEBUG] onVideoCached - checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess, 'isResolved:', isResolved);
+        
+        if (!checkSession() || currentAdSuccess || isResolved) {
+          console.log('[DEBUG] onVideoCached - 被忽略 (可能是会话过期或已处理)');
+          return;
+        }
         
         console.log('✅ 视频下载成功，准备显示广告');
         try {
           if (slotTimeoutId) {
             clearTimeout(slotTimeoutId);
-            console.log('✅ 清除单层超时定时器');
+            console.log('[DEBUG] onVideoCached - 已清除超时定时器');
           }
           
           isAdReady.value = true;
           isAdLoading.value = false;
+          console.log('[DEBUG] onVideoCached - isAdReady=true, isAdLoading=false');
           
           // 检查广告是否就绪（未过期且缓存成功）
-          console.log('🔍 检查广告就绪状态...');
+          console.log('[DEBUG] onVideoCached - 检查广告就绪状态...');
           try {
+            const readyStartTime = Date.now();
             const readyStatus = await GDTAd.isReady();
-            console.log('📊 广告就绪状态:', readyStatus);
+            console.log(`[DEBUG] onVideoCached - isReady返回 (耗时${Date.now() - readyStartTime}ms):`, JSON.stringify(readyStatus));
             
             if (!readyStatus.ready) {
-              console.warn('⚠️ 广告未就绪（可能已过期或未缓存完成）');
-              // 即使isReady返回false，也尝试显示广告，因为广告可能已经加载成功
-              console.log('🔄 尝试强制显示广告...');
+              console.warn('[DEBUG] onVideoCached - 广告未就绪，但仍尝试显示');
             }
           } catch (error) {
-            console.warn('⚠️ 检查广告就绪状态失败:', error);
-            // 检查失败时也尝试显示广告
+            console.warn('[DEBUG] onVideoCached - isReady检查失败:', error);
           }
           
-          console.log('✅ 广告位加载成功且已就绪，准备播放');
+          console.log('[DEBUG] onVideoCached - 调用 showRewardVideoAd...');
+          const showStartTime = Date.now();
           await GDTAd.showRewardVideoAd();
+          console.log(`[DEBUG] onVideoCached - showRewardVideoAd 调用成功 (耗时${Date.now() - showStartTime}ms)`);
           console.log('✅ 广告显示命令已发送');
         } catch (error) {
+          console.error('[DEBUG] onVideoCached - 显示广告失败:', error);
+          console.error('[DEBUG] onVideoCached - 错误类型:', typeof error, 'message:', error?.message);
           console.error('❌ 显示广告失败:', error);
           lastError.value = '显示广告失败: ' + (error?.message || error);
           cleanupListeners();
@@ -1166,37 +1270,65 @@ export function useAdManager(config: AdConfig) {
       };
 
       const onVideoError = () => {
-        if (!checkSession() || currentAdSuccess || isResolved) return;
+        const errorTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onVideoError 触发 - 视频下载失败 (距离加载开始: ${errorTime}ms)`);
+        console.log('[DEBUG] onVideoError - checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess, 'isResolved:', isResolved);
+        if (!checkSession() || currentAdSuccess || isResolved) {
+          console.log('[DEBUG] onVideoError - 被忽略 (会话过期或已处理)');
+          return;
+        }
         
         console.warn('⚠️ 视频下载失败');
         lastError.value = '视频下载失败，可能是广告填充不足';
         
-        if (slotTimeoutId) clearTimeout(slotTimeoutId);
+        if (slotTimeoutId) {
+          clearTimeout(slotTimeoutId);
+          console.log('[DEBUG] onVideoError - 已清除超时定时器');
+        }
         cleanupListeners();
         resolveOnce('failed');
       };
       
       const onADClose = () => {
-        if (!checkSession()) return;
+        const closeTime = Date.now() - slotStartTime;
+        console.log(`[DEBUG] onADClose 触发 - 广告关闭回调 (距离加载开始: ${closeTime}ms)`);
+        console.log('[DEBUG] onADClose - checkSession:', checkSession(), 'currentAdSuccess:', currentAdSuccess, 'isResolved:', isResolved);
+        console.log('[DEBUG] onADClose - isAdReady:', isAdReady.value, 'isAdLoading:', isAdLoading.value);
+        
+        if (!checkSession()) {
+          console.log('[DEBUG] onADClose - 会话已过期，忽略');
+          return;
+        }
         
         console.log('✅ 广告关闭回调');
-        if (slotTimeoutId) clearTimeout(slotTimeoutId);
+        if (slotTimeoutId) {
+          clearTimeout(slotTimeoutId);
+          console.log('[DEBUG] onADClose - 已清除 slotTimeoutId');
+        }
         isAdReady.value = false;
         isAdLoading.value = false;
+        console.log('[DEBUG] onADClose - 已重置 isAdReady/isAdLoading');
         
         // 延迟 500ms 判定，确保 onReward 有机会先到达
+        console.log('[DEBUG] onADClose - 延迟500ms后检查奖励状态...');
+        const delayStart = Date.now();
         setTimeout(() => {
+          const elapsed = Date.now() - delayStart;
+          console.log(`[DEBUG] onADClose setTimeout - ${elapsed}ms 后触发, currentAdSuccess=${currentAdSuccess}, isResolved=${isResolved}`);
           if (!currentAdSuccess && !isResolved) {
-            console.log('广告关闭但未获得奖励，标记为失败');
+            console.log('[DEBUG] onADClose setTimeout - 广告关闭但未获得奖励，标记为失败');
+            console.log('[DEBUG] onADClose setTimeout - 可能原因: onReward 回调未触发或被忽略');
             cleanupListeners();
             resolveOnce('failed');
           } else {
+            console.log('[DEBUG] onADClose setTimeout - 成功获得奖励或已 resolve，清理监听器');
             // 成功获得奖励或已 resolve，清理监听器
             cleanupListeners();
           }
         }, 500);
       };
       
+      console.log('[DEBUG] 注册监听器...');
       adLoadListener = onADLoad;
       rewardListener = onReward;
       errorListener = onError;
@@ -1208,12 +1340,23 @@ export function useAdManager(config: AdConfig) {
       GDTAd.addListener('onReward', onReward);
       GDTAd.addListener('onError', onError);
       GDTAd.addListener('onVideoCached', onVideoCached);
-      GDTAd.addListener('onError', onVideoError);
+      GDTAd.addListener('onVideoError', onVideoError);
       GDTAd.addListener('onADClose', onADClose);
+      console.log('[DEBUG] 监听器注册完成 (onADLoad, onReward, onError, onVideoCached, onVideoError, onADClose)');
       
-      GDTAd.loadRewardVideoAd({ adId: selectedSlotId })
-        .then(() => console.log('✅ 广告加载请求已发送'))
+      console.log(`[DEBUG] 调用 GDTAd.loadRewardVideoAd({ adId: ${selectedSlotId} })`);
+      const loadPromise = GDTAd.loadRewardVideoAd({ adId: selectedSlotId });
+      console.log(`[DEBUG] loadRewardVideoAd 返回:`, loadPromise);
+      loadPromise
+        .then(() => {
+          console.log('[DEBUG] 广告加载请求已发送（Promise resolve）');
+          console.log('✅ 广告加载请求已发送');
+          isAdLoading.value = true;
+          console.log('[DEBUG] isAdLoading 设为 true');
+        })
         .catch((err: any) => {
+          console.error('[DEBUG] 加载广告请求失败:', JSON.stringify(err));
+          console.error('[DEBUG] 错误详情 - message:', err?.message, 'code:', err?.code);
           console.error('❌ 加载广告请求失败:', err);
           if (!isResolved) {
             cleanupListeners();
@@ -1223,10 +1366,16 @@ export function useAdManager(config: AdConfig) {
       
       // 单层超时
       const SLOT_TIMEOUT = 3000;
+      console.log(`[DEBUG] 设置 ${SLOT_TIMEOUT}ms 超时定时器`);
       slotTimeoutId = setTimeout(() => {
-        if (!checkSession() || currentAdSuccess || isResolved) return;
+        console.log(`[DEBUG] 超时触发 - checkSession=${checkSession()}, currentAdSuccess=${currentAdSuccess}, isResolved=${isResolved}`);
+        if (!checkSession() || currentAdSuccess || isResolved) {
+          console.log('[DEBUG] 超时被忽略 - 状态已变更');
+          return;
+        }
         
         console.warn(`⏱️ 单层广告加载超时（${SLOT_TIMEOUT}ms）`);
+        console.log(`[DEBUG] 超时 - 广告位 ${selectedSlotId} 未能在规定时间内完成加载`);
         cleanupListeners();
         resolveOnce('failed');
       }, SLOT_TIMEOUT);

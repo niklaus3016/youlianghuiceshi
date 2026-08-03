@@ -10,7 +10,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.qq.e.ads.rewardvideo.RewardVideoAD;
 import com.qq.e.ads.rewardvideo.RewardVideoADListener;
+import com.qq.e.ads.rewardvideo.ServerSideVerificationOptions;
 import com.qq.e.comm.listeners.NegativeFeedbackListener;
+import com.qq.e.comm.pi.IReward;
 import com.qq.e.comm.util.AdError;
 
 import java.util.Locale;
@@ -100,7 +102,9 @@ public class GDTAdPlugin extends Plugin {
 
                     @Override
                     public void onReward(Map<String, Object> map) {
-                        Log.d(TAG, "获得奖励 onReward: " + map);
+                        // 与官方 Demo 一致：获取 TRANS_ID 和 DEV_EXT
+                        Log.i(TAG, "onReward " + map.get(ServerSideVerificationOptions.TRANS_ID) + " " + map.get(IReward.DEV_EXT));
+                        Log.d(TAG, "onReward 完整map: " + map);
                         isRewardGiven = true;
                         completeReward("onReward", map);
                     }
@@ -131,8 +135,13 @@ public class GDTAdPlugin extends Plugin {
                         result.put("rewardVerify", true);
                         result.put("rewardSource", source);
 
-                        if (map != null && map.containsKey("transid")) {
-                            result.put("transid", map.get("transid"));
+                        // 使用官方文档要求的 ServerSideVerificationOptions.TRANS_ID
+                        if (map != null && map.containsKey(ServerSideVerificationOptions.TRANS_ID)) {
+                            result.put("transid", map.get(ServerSideVerificationOptions.TRANS_ID));
+                        }
+                        // 同时添加 DEV_EXT
+                        if (map != null && map.containsKey(IReward.DEV_EXT)) {
+                            result.put("devExt", map.get(IReward.DEV_EXT));
                         }
 
                         // 优先使用onADLoad时保存的ECPM（更可靠）
@@ -210,7 +219,7 @@ public class GDTAdPlugin extends Plugin {
                     }
                 };
 
-                // 创建 RewardVideoAD，有声播放
+                // 创建 RewardVideoAD，有声播放（与官方 Demo 一致）
                 mRewardVideoAD = new RewardVideoAD(activity, posId, mRewardVideoADListener, true);
 
                 // 设置负面反馈监听器（官方文档要求）
@@ -220,6 +229,14 @@ public class GDTAdPlugin extends Plugin {
                         Log.i(TAG, "onComplainSuccess: 用户反馈成功");
                     }
                 });
+
+                // 设置服务端验证选项（与官方 Demo 一致，即使没有服务端也建议设置）
+                ServerSideVerificationOptions options = new ServerSideVerificationOptions.Builder()
+                        .setCustomData("APP's custom data")
+                        .setUserId("APP's user id for server verify")
+                        .build();
+                mRewardVideoAD.setServerSideVerificationOptions(options);
+                Log.d(TAG, "已设置 ServerSideVerificationOptions");
 
                 // 加载广告
                 mRewardVideoAD.loadAD();
