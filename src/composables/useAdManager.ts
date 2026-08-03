@@ -866,11 +866,12 @@ export function useAdManager(config: AdConfig) {
         isLoaded.value = true;
         preloadAd.value = true;
         
-        // SDK 加载成功后 500ms 触发预加载
-        setTimeout(() => {
-          console.log('📱 原生环境 SDK 就绪，开始预加载广告');
-          preloadNextAd();
-        }, 500);
+        // 注释掉预加载代码，使用简单加载流程
+        // // SDK 加载成功后 500ms 触发预加载
+        // setTimeout(() => {
+        //   console.log('📱 原生环境 SDK 就绪，开始预加载广告');
+        //   preloadNextAd();
+        // }, 500);
         
         return;
       }
@@ -1009,119 +1010,34 @@ export function useAdManager(config: AdConfig) {
         return;
       }
       
-      // 红包触发逻辑已移到广告成功后
-      
       isProcessing = true;
       resetAdState();
       currentResolve = resolve;
       currentReject = reject;
       
-      console.log('========== 开始加载激励视频广告 ==========');
+      console.log('========== 开始加载激励视频广告（简单模式） ==========');
       console.log('所有广告位:', config.slotIds);
-      console.log('是否原生环境:', isNativeApp());
       
-      // 检查是否有预加载的广告
-      if (preloadedAd && preloadedAd.isReady) {
-        console.log('🚀 检测到预加载的广告，准备使用');
-        try {
-          await showPreloadedAd(resolve, reject);
-          isProcessing = false;
-          // 使用预加载成功，智能触发预加载为下次做准备
-          console.log('📋 直接使用预加载成功，智能触发预加载');
-          smartPreload();
-          return;
-        } catch (error) {
-          console.log('预加载广告显示失败，开始新的预加载');
-          // 继续预加载流程
-        }
-      }
-      
-      // 如果正在预加载，等待预加载完成
-      if (isPreloading && preloadingPromise) {
-        console.log('⏳ 正在等待预加载完成...');
-        await preloadingPromise;
+      // 简化：直接使用 tryLoadAd 加载，不使用预加载
+      try {
+        const result = await tryLoadAd();
         
-        // 等待完成后，检查是否有预加载的广告
-        if (preloadedAd && preloadedAd.isReady) {
-          console.log('🚀 预加载完成，准备使用');
-          try {
-            await showPreloadedAd(resolve, reject);
-            isProcessing = false;
-            // 等待预加载后使用成功，智能触发预加载为下次做准备
-            console.log('📋 等待预加载后使用成功，智能触发预加载');
-            smartPreload();
-            return;
-          } catch (error) {
-            console.log('预加载广告显示失败');
-          }
-        }
-      }
-      
-      // 没有预加载的广告，也没有正在进行的预加载，开始新的预加载
-      console.log('🔄 没有预加载的广告，开始预加载...');
-      await preloadNextAd();
-      
-      // 预加载完成后，检查是否有预加载的广告
-      if (preloadedAd && preloadedAd.isReady) {
-        console.log('🚀 预加载成功，准备使用');
-        try {
-          await showPreloadedAd(resolve, reject);
+        if (result === 'success') {
+          console.log('✅ 广告加载并显示成功');
+          // currentResolve 已在 onReward 中被调用
+        } else if (result === 'session_expired') {
+          console.log('❌ 会话已过期');
           isProcessing = false;
-          // 使用预加载成功，智能触发预加载为下次做准备
-          console.log('📋 预加载广告使用成功，智能触发预加载');
-          smartPreload();
-          return;
-        } catch (error) {
-          console.log('预加载广告显示失败');
+          reject(new Error('会话已过期'));
+        } else {
+          console.log('❌ 广告加载失败');
           isProcessing = false;
           reject(new Error('暂无广告'));
-          return;
         }
-      } else {
-        console.log('❌ 预加载失败，直接请求所有广告位');
-        // 预加载失败，直接请求所有广告位串行
-        const allSlots = Object.values(AD_GROUPS).flat();
-        console.log('🔄 直接请求所有广告位:', allSlots);
-        
-        for (let i = 0; i < allSlots.length; i++) {
-          const slotId = allSlots[i];
-          console.log(`🔄 紧急加载 [${i + 1}/${allSlots.length}]: ${slotId}`);
-          
-          const isReady = await preloadSingleSlot(slotId);
-          
-          if (isReady) {
-            console.log(`🎉 紧急加载成功: ${slotId}`);
-            // 使用这个广告位显示广告
-            preloadedAd = {
-              slotId: slotId,
-              isReady: true,
-              loadedAt: Date.now()
-            };
-            try {
-                await showPreloadedAd(resolve, reject);
-                isProcessing = false;
-                // 紧急加载成功，智能触发预加载为下次做准备
-                console.log('📋 紧急加载成功，智能触发预加载');
-                smartPreload();
-                return;
-              } catch (error) {
-                console.log('紧急加载广告显示失败');
-                isProcessing = false;
-                reject(new Error('暂无广告'));
-                return;
-              }
-          }
-          
-          // 广告位之间延迟300ms
-          if (i < allSlots.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 300));
-          }
-        }
-        
-        console.log('❌ 所有广告位都加载失败');
+      } catch (error) {
+        console.log('❌ 广告加载异常:', error);
         isProcessing = false;
-        reject(new Error('暂无广告'));
-        return;
+        reject(new Error('广告加载异常'));
       }
     });
   };
