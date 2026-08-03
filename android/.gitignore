@@ -6,6 +6,9 @@
 *.ap_
 *.aab
 
+# 百度广告 SDK 的 aar 文件需要提交到仓库（构建依赖）
+!app/libs/*.aar
+
 # Files for the ART/Dalvik VM
 *.dex
 
