@@ -916,6 +916,9 @@ export function useAdManager(config: AdConfig) {
       
       currentAdSuccess = true;
       
+      // 清理监听器，防止 onADClose 触发时误判
+      cleanupSlotListeners();
+      
       // 所有广告位都使用模拟 ECPM 值
       console.log('使用模拟 ECPM 值');
       const simulatedEcpm = generateSimulatedEcpm(slotId);
@@ -933,11 +936,18 @@ export function useAdManager(config: AdConfig) {
     
     const onADClose = () => {
       console.log(`✅ 预加载广告关闭回调 (${slotId})`);
-      cleanupSlotListeners();
-      if (!currentAdSuccess) {
-        console.log(`预加载广告关闭但未获得奖励 (${slotId})，标记为失败`);
-        resolveOnce(null);
-      }
+      
+      // 延迟 500ms 判定，确保 onReward 有机会先到达
+      setTimeout(() => {
+        if (!currentAdSuccess && !isResolved) {
+          console.log(`预加载广告关闭但未获得奖励 (${slotId})，标记为失败`);
+          cleanupSlotListeners();
+          resolveOnce(null);
+        } else {
+          // 成功获得奖励，清理监听器
+          cleanupSlotListeners();
+        }
+      }, 500);
     };
     
     const cleanupSlotListeners = () => {
@@ -1242,13 +1252,18 @@ export function useAdManager(config: AdConfig) {
         if (slotTimeoutId) clearTimeout(slotTimeoutId);
         isAdReady.value = false;
         isAdLoading.value = false;
-        cleanupListeners();
         
-        // 如果广告未成功（用户跳过或未获得奖励），标记为失败
-        if (!currentAdSuccess) {
-          console.log('广告关闭但未获得奖励，标记为失败');
-          resolveOnce('failed');
-        }
+        // 延迟 500ms 判定，确保 onReward 有机会先到达
+        setTimeout(() => {
+          if (!currentAdSuccess && !isResolved) {
+            console.log('广告关闭但未获得奖励，标记为失败');
+            cleanupListeners();
+            resolveOnce('failed');
+          } else {
+            // 成功获得奖励或已 resolve，清理监听器
+            cleanupListeners();
+          }
+        }, 500);
       };
       
       adLoadListener = onADLoad;

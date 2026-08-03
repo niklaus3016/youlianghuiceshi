@@ -22,6 +22,8 @@ public class GDTAdPlugin extends Plugin {
     private static final String TAG = "GDTAdPlugin";
     private RewardVideoAD mRewardVideoAD;
     private PluginCall pendingShowCall;
+    private boolean isRewardGiven = false;  // 标记是否已发放奖励
+    private android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @PluginMethod
     public void loadRewardVideoAd(PluginCall call) {
@@ -41,6 +43,8 @@ public class GDTAdPlugin extends Plugin {
 
         activity.runOnUiThread(() -> {
             try {
+                // 重置状态
+                isRewardGiven = false;
                 // 创建 RewardVideoAD，有声播放
                 mRewardVideoAD = new RewardVideoAD(activity, posId, new RewardVideoADListener() {
                     @Override
@@ -71,6 +75,7 @@ public class GDTAdPlugin extends Plugin {
                     @Override
                     public void onReward(Map<String, Object> map) {
                         Log.d(TAG, "获得奖励 onReward: " + map);
+                        isRewardGiven = true;  // 标记奖励已发放
 
                         JSObject result = new JSObject();
                         result.put("rewardVerify", true);
@@ -98,9 +103,13 @@ public class GDTAdPlugin extends Plugin {
                         result.put("ecpm", ecpmValue);
                         Log.d(TAG, "最终返回的ECPM: " + ecpmValue);
 
+                        // 先通知前端监听器
                         notifyListeners("onReward", result);
+                        Log.d(TAG, "已通知前端 onReward");
 
+                        // 再 resolve showRewardVideoAd 的 Promise
                         if (pendingShowCall != null) {
+                            Log.d(TAG, "resolve pendingShowCall (奖励成功)");
                             pendingShowCall.resolve(result);
                             pendingShowCall = null;
                         }
@@ -120,18 +129,26 @@ public class GDTAdPlugin extends Plugin {
 
                     @Override
                     public void onADClose() {
-                        Log.d(TAG, "广告关闭 onADClose");
+                        Log.d(TAG, "广告关闭 onADClose, isRewardGiven=" + isRewardGiven);
                         notifyListeners("onADClose", new JSObject());
 
-                        // 如果 onReward 没有被触发（用户跳过），广告关闭时 resolve
-                        if (pendingShowCall != null) {
-                            Log.d(TAG, "广告关闭时 resolve pendingShowCall（无奖励）");
-                            JSObject result = new JSObject();
-                            result.put("rewardVerify", false);
-                            result.put("ecpm", 0);
-                            pendingShowCall.resolve(result);
-                            pendingShowCall = null;
-                        }
+                        // 延迟处理，确保 onReward 有机会先执行
+                        handler.postDelayed(() -> {
+                            if (pendingShowCall != null) {
+                                if (isRewardGiven) {
+                                    // onReward 应该已经 resolve 了，但为保险起见再检查
+                                    Log.d(TAG, "onADClose delayed: 奖励已发放，resolve（不应该执行到这里）");
+                                } else {
+                                    // 奖励未发放，判定为失败
+                                    Log.d(TAG, "onADClose delayed: 奖励未发放，resolve pendingShowCall（无奖励）");
+                                    JSObject result = new JSObject();
+                                    result.put("rewardVerify", false);
+                                    result.put("ecpm", 0);
+                                    pendingShowCall.resolve(result);
+                                    pendingShowCall = null;
+                                }
+                            }
+                        }, 300); // 延迟 300ms
                     }
 
                     @Override
@@ -190,6 +207,7 @@ public class GDTAdPlugin extends Plugin {
             try {
                 if (mRewardVideoAD.isValid() && !mRewardVideoAD.hasShown()) {
                     pendingShowCall = call;
+                    isRewardGiven = false;  // 重置奖励标志
                     mRewardVideoAD.showAD();
                 } else {
                     call.reject(mRewardVideoAD.hasShown() ? "广告已展示过" : "广告无效");
