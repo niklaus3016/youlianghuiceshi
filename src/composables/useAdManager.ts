@@ -1048,29 +1048,38 @@ export function useAdManager(config: AdConfig) {
       console.log('========== 开始加载激励视频广告（简单模式） ==========');
       console.log('所有广告位:', config.slotIds);
       
-      // 简化：直接使用 tryLoadAd 加载，不使用预加载
+      // 简化：循环调用 tryLoadAd，依次尝试每个广告位
       try {
-        console.log(`[DEBUG] showAd - 调用 tryLoadAd()`);
-        const loadStartTime = Date.now();
-        const result = await tryLoadAd();
-        const loadDuration = Date.now() - loadStartTime;
-        console.log(`[DEBUG] showAd - tryLoadAd 返回: result=${result}, 耗时=${loadDuration}ms`);
+        const maxSlots = config.slotIds.length;
+        console.log(`[DEBUG] showAd - 开始串行尝试 ${maxSlots} 个广告位`);
         
-        if (result === 'success') {
-          console.log(`[DEBUG] showAd - 广告加载并显示成功 (耗时: ${Date.now() - startTime}ms)`);
-          console.log('✅ 广告加载并显示成功');
-          // currentResolve 已在 onReward 中被调用
-        } else if (result === 'session_expired') {
-          console.log('[DEBUG] showAd - 会话已过期');
-          console.log('❌ 会话已过期');
-          isProcessing = false;
-          reject(new Error('会话已过期'));
-        } else {
-          console.log('[DEBUG] showAd - 广告加载失败');
-          console.log('❌ 广告加载失败');
-          isProcessing = false;
-          reject(new Error('暂无广告'));
+        while (triedSlots < maxSlots) {
+          console.log(`[DEBUG] showAd - 第 ${triedSlots + 1}/${maxSlots} 次尝试`);
+          const result = await tryLoadAd();
+          console.log(`[DEBUG] showAd - tryLoadAd 返回: ${result}`);
+          
+          if (result === 'success') {
+            console.log(`[DEBUG] showAd - 广告加载并显示成功 (耗时: ${Date.now() - startTime}ms)`);
+            console.log('✅ 广告加载并显示成功');
+            // currentResolve 已在 onReward 中被调用
+            return;
+          } else if (result === 'session_expired') {
+            console.log('[DEBUG] showAd - 会话已过期，停止尝试');
+            console.log('❌ 会话已过期');
+            isProcessing = false;
+            reject(new Error('会话已过期'));
+            return;
+          }
+          
+          // failed - 继续尝试下一个广告位
+          console.log(`[DEBUG] showAd - 当前广告位失败，尝试下一个...`);
         }
+        
+        // 所有广告位都尝试完毕
+        console.log(`[DEBUG] showAd - 所有 ${maxSlots} 个广告位都已尝试完毕`);
+        console.log('❌ 所有广告位均失败');
+        isProcessing = false;
+        reject(new Error('暂无广告'));
       } catch (error) {
         console.log(`[DEBUG] showAd - 捕获异常:`, error);
         console.log('❌ 广告加载异常:', error);
