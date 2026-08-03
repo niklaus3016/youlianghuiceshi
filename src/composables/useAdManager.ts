@@ -672,6 +672,9 @@ export function useAdManager(config: AdConfig) {
           currentAdSuccess = true;
           if (slotTimeoutId) clearTimeout(slotTimeoutId);
           
+          // 清理监听器，防止 onADClose 的延迟回调误判
+          cleanupSlotListeners();
+          
           // 所有广告位都使用模拟 ECPM 值
           console.log('使用模拟 ECPM 值');
           const simulatedEcpm = generateSimulatedEcpm(slotId);
@@ -726,10 +729,19 @@ export function useAdManager(config: AdConfig) {
         const onADClose = () => {
           if (!checkSession()) return;
           console.log(`✅ 广告关闭回调 (${slotId})`);
-          if (!currentAdSuccess) {
-            console.log(`广告关闭但未获得奖励 (${slotId})，标记为失败`);
-            resolveOnce(null);
-          }
+          
+          // 延迟 500ms 判定，确保 onReward 有机会先到达
+          setTimeout(() => {
+            if (!checkSession() || isResolved) return;
+            if (!currentAdSuccess) {
+              console.log(`广告关闭但未获得奖励 (${slotId})，标记为失败`);
+              cleanupSlotListeners();
+              resolveOnce(null);
+            } else {
+              // 成功获得奖励，清理监听器
+              cleanupSlotListeners();
+            }
+          }, 500);
         };
         
         // 注册监听器
@@ -1162,6 +1174,9 @@ export function useAdManager(config: AdConfig) {
         
         currentAdSuccess = true;
         if (slotTimeoutId) clearTimeout(slotTimeoutId);
+        
+        // 清理监听器，防止 onADClose 的延迟回调误判
+        cleanupListeners();
         
         const currentSlotId = config.slotIds[(currentSlotIndex - 1 + config.slotIds.length) % config.slotIds.length];
 

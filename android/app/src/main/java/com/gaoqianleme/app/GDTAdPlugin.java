@@ -10,7 +10,6 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.qq.e.ads.rewardvideo.RewardVideoAD;
 import com.qq.e.ads.rewardvideo.RewardVideoADListener;
-import com.qq.e.ads.rewardvideo.ServerSideVerificationOptions;
 import com.qq.e.comm.util.AdError;
 
 import java.util.Locale;
@@ -21,9 +20,10 @@ public class GDTAdPlugin extends Plugin {
 
     private static final String TAG = "GDTAdPlugin";
     private RewardVideoAD mRewardVideoAD;
+    private RewardVideoADListener mRewardVideoADListener;  // 保持强引用，防止GC回收
     private PluginCall pendingShowCall;
-    private boolean isRewardGiven = false;  // 标记是否已发放奖励
-    private android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean isRewardGiven = false;
+    private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
 
     @PluginMethod
     public void loadRewardVideoAd(PluginCall call) {
@@ -45,8 +45,9 @@ public class GDTAdPlugin extends Plugin {
             try {
                 // 重置状态
                 isRewardGiven = false;
-                // 创建 RewardVideoAD，有声播放
-                mRewardVideoAD = new RewardVideoAD(activity, posId, new RewardVideoADListener() {
+
+                // 创建监听器并保存为成员变量，防止被GC回收
+                mRewardVideoADListener = new RewardVideoADListener() {
                     @Override
                     public void onADLoad() {
                         Log.d(TAG, "广告加载成功 onADLoad");
@@ -56,7 +57,6 @@ public class GDTAdPlugin extends Plugin {
                     @Override
                     public void onVideoCached() {
                         Log.d(TAG, "视频缓存成功 onVideoCached");
-                        // 视频缓存成功即可展示，对应百度的 onVideoDownloadSuccess
                         notifyListeners("onVideoCached", new JSObject());
                     }
 
@@ -75,19 +75,15 @@ public class GDTAdPlugin extends Plugin {
                     @Override
                     public void onReward(Map<String, Object> map) {
                         Log.d(TAG, "获得奖励 onReward: " + map);
-                        isRewardGiven = true;  // 标记奖励已发放
+                        isRewardGiven = true;
 
                         JSObject result = new JSObject();
                         result.put("rewardVerify", true);
 
-                        // 从 map 中提取 TRANS_ID 和其他信息
-                        if (map != null) {
-                            for (String key : map.keySet()) {
-                                Object value = map.get(key);
-                                if (value != null) {
-                                    result.put(key, value);
-                                }
-                            }
+                        // 未使用服务端验证，不需关注 map 参数
+                        // 但仍提取 TRANS_ID 供参考
+                        if (map != null && map.containsKey("transid")) {
+                            result.put("transid", map.get("transid"));
                         }
 
                         // 获取 eCPM
@@ -132,12 +128,11 @@ public class GDTAdPlugin extends Plugin {
                         Log.d(TAG, "广告关闭 onADClose, isRewardGiven=" + isRewardGiven);
                         notifyListeners("onADClose", new JSObject());
 
-                        // 延迟处理，确保 onReward 有机会先执行
+                        // 延迟处理，确保 onReward 有机会先执行（GDT文档说明所有回调在主线程异步调用）
                         handler.postDelayed(() -> {
                             if (pendingShowCall != null) {
                                 if (isRewardGiven) {
-                                    // onReward 应该已经 resolve 了，但为保险起见再检查
-                                    Log.d(TAG, "onADClose delayed: 奖励已发放，resolve（不应该执行到这里）");
+                                    Log.d(TAG, "onADClose delayed: 奖励已发放，pendingShowCall 已在 onReward 中 resolve");
                                 } else {
                                     // 奖励未发放，判定为失败
                                     Log.d(TAG, "onADClose delayed: 奖励未发放，resolve pendingShowCall（无奖励）");
@@ -148,7 +143,7 @@ public class GDTAdPlugin extends Plugin {
                                     pendingShowCall = null;
                                 }
                             }
-                        }, 300); // 延迟 300ms
+                        }, 300);
                     }
 
                     @Override
@@ -168,14 +163,12 @@ public class GDTAdPlugin extends Plugin {
                             pendingShowCall = null;
                         }
                     }
-                }, true);
+                };
 
-                // 设置服务端验证选项（可选）
-                ServerSideVerificationOptions options = new ServerSideVerificationOptions.Builder()
-                        .setCustomData("")
-                        .setUserId("")
-                        .build();
-                mRewardVideoAD.setServerSideVerificationOptions(options);
+                // 创建 RewardVideoAD，有声播放
+                mRewardVideoAD = new RewardVideoAD(activity, posId, mRewardVideoADListener, true);
+
+                // 未使用服务端验证，不调用 setServerSideVerificationOptions
 
                 // 加载广告
                 mRewardVideoAD.loadAD();
@@ -207,7 +200,7 @@ public class GDTAdPlugin extends Plugin {
             try {
                 if (mRewardVideoAD.isValid() && !mRewardVideoAD.hasShown()) {
                     pendingShowCall = call;
-                    isRewardGiven = false;  // 重置奖励标志
+                    isRewardGiven = false;
                     mRewardVideoAD.showAD();
                 } else {
                     call.reject(mRewardVideoAD.hasShown() ? "广告已展示过" : "广告无效");
