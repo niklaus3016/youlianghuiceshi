@@ -69,7 +69,7 @@ public class GDTAdPlugin extends Plugin {
                             Log.d(TAG, "视频时长: " + videoDuration + "ms");
                             Log.d(TAG, "ECPM: " + mSavedEcpm + ", ECPMLevel: " + mSavedEcpmLevel);
 
-                            Map<String, String> extraInfo = mRewardVideoAD.getExtraInfo();
+                            Map<String, Object> extraInfo = mRewardVideoAD.getExtraInfo();
                             if (extraInfo != null) {
                                 Log.d(TAG, "ExtraInfo mp: " + extraInfo.get("mp") + ", request_id: " + extraInfo.get("request_id"));
                             }
