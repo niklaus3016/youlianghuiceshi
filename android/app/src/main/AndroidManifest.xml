@@ -30,6 +30,16 @@
 
         </activity>
 
+        <!-- GDT SDK 激励视频广告必需的 Activity 配置 -->
+        <activity
+            android:name="com.qq.e.ads.PortraitADActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:screenOrientation="portrait" />
+        <activity
+            android:name="com.qq.e.ads.LandscapeADActivity"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
+            android:screenOrientation="landscape" />
+
         <!-- GDT SDK FileProvider for APK download/install -->
         <provider
             android:name="androidx.core.content.FileProvider"
